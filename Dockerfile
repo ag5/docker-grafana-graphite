@@ -1,13 +1,10 @@
-FROM     ubuntu:14.04
-
-# ---------------- #
-#   Installation   #
-# ---------------- #
+FROM ubuntu:14.04
 
 ENV DEBIAN_FRONTEND noninteractive
 
 # Install all prerequisites
-RUN     apt-get -y install software-properties-common
+RUN     apt-get -y update
+RUN     apt-get -y install software-properties-common dos2unix
 RUN     add-apt-repository -y ppa:chris-lea/node.js
 RUN     apt-get -y update
 RUN     apt-get -y install python-django-tagging python-simplejson python-memcache python-ldap python-cairo python-pysqlite2 python-support \
@@ -45,11 +42,14 @@ RUN     mkdir /src/grafana                                                      
         tar -xzf /src/grafana.tar.gz -C /opt/grafana --strip-components=1                                     &&\
         rm /src/grafana.tar.gz
 
+# Shared storage directory
+RUN     mkdir /opt/storage
+
 # ----------------- #
 #   Configuration   #
 # ----------------- #
 
-# Confiure StatsD
+# Configure StatsD
 ADD     ./statsd/config.js /src/statsd/config.js
 
 # Configure Whisper, Carbon and Graphite-Web
@@ -58,13 +58,6 @@ ADD     ./graphite/local_settings.py /opt/graphite/webapp/graphite/local_setting
 ADD     ./graphite/carbon.conf /opt/graphite/conf/carbon.conf
 ADD     ./graphite/storage-schemas.conf /opt/graphite/conf/storage-schemas.conf
 ADD     ./graphite/storage-aggregation.conf /opt/graphite/conf/storage-aggregation.conf
-RUN     mkdir -p /opt/graphite/storage/whisper &&\
-        touch /opt/graphite/storage/graphite.db /opt/graphite/storage/index &&\
-        chown -R www-data /opt/graphite/storage &&\
-        chmod 0775 /opt/graphite/storage /opt/graphite/storage/whisper &&\
-        chmod 0664 /opt/graphite/storage/graphite.db &&\
-        cd /opt/graphite/webapp/graphite &&\
-        python manage.py syncdb --noinput
 
 # Configure Grafana
 ADD     ./grafana/custom.ini /opt/grafana/conf/custom.ini
@@ -72,6 +65,8 @@ ADD     ./grafana/custom.ini /opt/grafana/conf/custom.ini
 # Configure nginx and supervisord
 ADD     ./nginx/nginx.conf /etc/nginx/nginx.conf
 ADD     ./supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+ADD     ./entrypoint.sh /entrypoint.sh
+RUN     dos2unix /entrypoint.sh && chmod a+x /entrypoint.sh
 
 # ---------------- #
 #   Expose Ports   #
@@ -89,8 +84,6 @@ EXPOSE  8125/udp
 # StatsD Management port
 EXPOSE  8126
 
-# -------- #
-#   Run!   #
-# -------- #
+VOLUME /opt/storage
 
-CMD     ["/usr/bin/supervisord"]
+ENTRYPOINT ./entrypoint.sh
